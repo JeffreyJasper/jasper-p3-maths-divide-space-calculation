@@ -3,134 +3,236 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Jasper 除法介面測試</title>
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#f0f9ff">
+    <title>Jasper 除法特訓 V3.0</title>
+    
     <script src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/canvas-confetti@1.9.2/dist/confetti.browser.min.js"></script>
     
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Noto+Sans+TC:wght@500;700;900&family=Roboto+Mono:wght@500;700&display=swap');
-        body { font-family: 'Noto Sans TC', sans-serif; background-color: #f0f9ff; }
+        body { font-family: 'Noto Sans TC', sans-serif; background-color: #f0f9ff; touch-action: manipulation; }
         .math-font { font-family: 'Roboto Mono', monospace; }
         
-        /* 模擬 V2.5 的輸入框樣式 */
+        /* 輸入框樣式 */
         .input-box {
             width: 40px; height: 50px;
             text-align: center; font-size: 1.5rem; font-weight: 700;
-            border: 2px solid #60a5fa; background-color: white;
+            border: 2px solid #cbd5e1; background-color: white;
             border-radius: 0.5rem; outline: none;
             font-family: 'Roboto Mono', monospace;
             display: flex; align-items: center; justify-content: center;
+            transition: all 0.2s;
         }
-        /* 固定數字樣式 */
+        .input-box:focus { border-color: #6366f1; background-color: #eef2ff; }
+        
+        /* 鎖定/正確樣式 */
         .static-num {
             width: 40px; height: 50px;
             display: flex; align-items: center; justify-content: center;
             font-size: 1.8rem; font-weight: 900; color: #334155;
             font-family: 'Roboto Mono', monospace;
         }
-        /* 除法專用線條 */
-        .division-bracket {
-            border-left: 3px solid #1e293b; /* 左豎線 */
-            border-top: 3px solid #1e293b;  /* 上橫線 */
-            padding-left: 0.5rem;
-            margin-left: 0.5rem;
-        }
-        .subtraction-line {
-            height: 2px; background-color: #1e293b; width: 100%; margin: 4px 0;
-        }
+        .correct { border-color: #22c55e; background-color: #f0fdf4; color: #15803d; }
+        .error { border-color: #ef4444; background-color: #fef2f2; animation: shake 0.4s; }
+        .retry-hint { border-color: #f97316; background-color: #fff7ed; animation: pulse 1.5s infinite; }
+
+        /* 除法結構線 */
+        .division-bracket { border-left: 3px solid #1e293b; border-top: 3px solid #1e293b; padding-left: 0.5rem; margin-left: 0.5rem; }
+        .subtraction-line { height: 2px; background-color: #1e293b; width: 100%; margin: 4px 0; }
+        
+        @keyframes shake { 0%, 100% { transform: translateX(0); } 25% { transform: translateX(-4px); } 75% { transform: translateX(4px); } }
+        @keyframes pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.6; } }
+        .fade-in { animation: fadeIn 0.3s ease-in; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
     </style>
 </head>
 <body>
     <div id="root"></div>
 
     <script type="text/babel">
-        const DivisionMockup = () => {
-            // 假數據： 75 / 3 = 25
+        const { useState, useEffect, useCallback, memo } = React;
+        const TOTAL_QUESTIONS = 10;
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+
+        // --- 音效模組 (沿用 V2.5) ---
+        const playSound = (type) => {
+            if (audioCtx.state === 'suspended') audioCtx.resume();
+            const now = audioCtx.currentTime;
+            const osc = audioCtx.createOscillator();
+            const gain = audioCtx.createGain();
+            osc.connect(gain); gain.connect(audioCtx.destination);
+            
+            if (type === 'success') {
+                osc.type = 'sine'; osc.frequency.setValueAtTime(660, now); 
+                osc.frequency.exponentialRampToValueAtTime(880, now + 0.1);
+                gain.gain.setValueAtTime(0, now); gain.gain.linearRampToValueAtTime(0.3, now + 0.05);
+                gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+                osc.start(now); osc.stop(now + 0.3);
+            } else if (type === 'error') {
+                osc.type = 'sawtooth'; osc.frequency.setValueAtTime(220, now); 
+                gain.gain.setValueAtTime(0.2, now); gain.gain.exponentialRampToValueAtTime(0.01, now + 0.3);
+                osc.start(now); osc.stop(now + 0.3);
+            } else if (type === 'win') {
+                [523.25, 659.25, 783.99, 1046.50].forEach((freq, i) => {
+                    const o = audioCtx.createOscillator(); const g = audioCtx.createGain();
+                    o.connect(g); g.connect(audioCtx.destination);
+                    o.frequency.value = freq;
+                    g.gain.setValueAtTime(0.1, now + i*0.1); g.gain.exponentialRampToValueAtTime(0.001, now + i*0.1 + 1.5);
+                    o.start(now + i*0.1); o.stop(now + i*0.1 + 1.5);
+                });
+            }
+        };
+
+        // --- 單個格子元件 ---
+        const Slot = ({ q, id, val, userInputs, mode, onInput }) => {
+            const isBlank = q.blanks.includes(id);
+            
+            if (!isBlank) {
+                return <div className="static-num">{val}</div>;
+            }
+
+            const inputVal = userInputs[id] || '';
+            const isCorrect = inputVal === val.toString();
+            const isLocked = mode === 'retry' && isCorrect;
+            
+            let statusClass = "";
+            if (isLocked) statusClass = "correct";
+            else if (mode === 'retry') statusClass = "retry-hint";
+            
             return (
-                <div className="min-h-screen flex flex-col items-center justify-center p-4">
-                    
-                    <div className="bg-white p-8 rounded-[2rem] shadow-xl border border-indigo-100 max-w-md w-full">
-                        <div className="text-center mb-8">
-                            <span className="bg-indigo-100 text-indigo-700 px-4 py-1 rounded-full text-sm font-bold">
-                                UI Prototype (兩位數除法)
-                            </span>
+                <input 
+                    type="tel" 
+                    value={inputVal}
+                    readOnly={isLocked}
+                    onChange={(e) => onInput(id, e.target.value)}
+                    className={`input-box ${statusClass}`}
+                />
+            );
+        };
+
+        const QuestionCard = ({ q, index, userInputs, mode, feedback, onInput, onSubmit }) => {
+            if (!q) return null;
+            const d = q.digits; // 縮寫方便讀取
+
+            return (
+                <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-xl border border-indigo-100 max-w-md w-full fade-in mx-auto mt-10">
+                    <div className="flex justify-between items-center mb-8">
+                        <span className="bg-indigo-100 text-indigo-700 px-4 py-1 rounded-full text-sm font-bold">Q {index + 1} / {TOTAL_QUESTIONS}</span>
+                        <span className="text-slate-400 font-mono font-bold">除法特訓</span>
+                    </div>
+
+                    {/* 直式除法佈局 (Grid) */}
+                    <div className="flex justify-center text-3xl select-none">
+                        
+                        {/* 左邊：除數 */}
+                        <div className="flex flex-col items-end pt-[3.5rem] mr-1">
+                            {/* 除數永遠不挖空，這是鎖定關鍵 */}
+                            <div className="static-num">{d.divisor}</div> 
+                            <div className="h-12 w-8 text-slate-300 text-xl flex items-center justify-end font-bold">-</div>
+                            <div className="h-2"></div>
+                            <div className="h-12"></div>
+                            <div className="h-12 w-8 text-slate-300 text-xl flex items-center justify-end font-bold">-</div>
                         </div>
 
-                        {/* 直式除法 Grid 容器 */}
-                        <div className="flex justify-center text-3xl">
-                            
-                            {/* 左邊：除數 (Divisor) */}
-                            <div className="flex flex-col items-end pt-[3.5rem] mr-1">
-                                <div className="static-num">3</div> {/* 除數 */}
-                                <div className="h-12 w-8 text-slate-300 text-xl flex items-center justify-end font-bold">-</div>
-                                <div className="h-2"></div>
-                                <div className="h-12"></div>
-                                <div className="h-12 w-8 text-slate-300 text-xl flex items-center justify-end font-bold">-</div>
+                        {/* 右邊：主體 */}
+                        <div>
+                            {/* Row 1: 商 (Quotient) */}
+                            <div className="flex justify-start pl-4 gap-1 mb-1">
+                                <Slot q={q} id="q_t" val={d.q_t} userInputs={userInputs} mode={mode} onInput={onInput} />
+                                <Slot q={q} id="q_o" val={d.q_o} userInputs={userInputs} mode={mode} onInput={onInput} />
                             </div>
 
-                            {/* 右邊：主體 (Quotient + Dividend + Steps) */}
-                            <div>
-                                {/* Row 1: 商 (Quotient) */}
-                                <div className="flex justify-start pl-4 gap-1 mb-1">
-                                    <input className="input-box text-blue-600" defaultValue="2" />
-                                    <input className="input-box text-blue-600" defaultValue="5" />
-                                </div>
-
-                                {/* Row 2: 被除數 (Dividend) 被括號包住 */}
-                                <div className="division-bracket pt-1 pb-1">
-                                    <div className="flex gap-1">
-                                        <div className="static-num">7</div>
-                                        <div className="static-num">5</div>
-                                    </div>
-                                </div>
-
-                                {/* Row 3: 第一步乘積 (3x2=6) */}
-                                <div className="flex justify-start gap-1 pl-4">
-                                    <input className="input-box" defaultValue="6" />
-                                    <div className="w-[40px]"></div> {/* 空位 */}
-                                </div>
-
-                                {/* Line */}
-                                <div className="pl-4"><div className="subtraction-line w-[44px]"></div></div>
-
-                                {/* Row 4: 餘數1 + 降位 (7-6=1, 降5 -> 15) */}
-                                <div className="flex justify-start gap-1 pl-4">
-                                    <input className="input-box" defaultValue="1" />
-                                    <div className="static-num text-slate-400 animate-bounce">5</div> {/* 降位通常是自動顯示或填寫 */}
-                                </div>
-
-                                {/* Row 5: 第二步乘積 (3x5=15) */}
-                                <div className="flex justify-start gap-1 pl-4">
-                                    <input className="input-box" defaultValue="1" />
-                                    <input className="input-box" defaultValue="5" />
-                                </div>
-
-                                {/* Line */}
-                                <div className="pl-4"><div className="subtraction-line w-[88px]"></div></div>
-
-                                {/* Row 6: 最終餘數 (Remainder) */}
-                                <div className="flex justify-end gap-1 pl-4">
-                                    <input className="input-box border-green-400 bg-green-50" defaultValue="0" />
+                            {/* Row 2: 被除數 (Dividend) */}
+                            <div className="division-bracket pt-1 pb-1">
+                                <div className="flex gap-1">
+                                    <Slot q={q} id="div_t" val={d.div_t} userInputs={userInputs} mode={mode} onInput={onInput} />
+                                    <Slot q={q} id="div_o" val={d.div_o} userInputs={userInputs} mode={mode} onInput={onInput} />
                                 </div>
                             </div>
-                        </div>
 
-                        <div className="mt-10 text-center text-slate-400 text-sm font-bold">
-                            註：這是 75 ÷ 3 = 25 的視覺範例
+                            {/* Row 3: 第一步乘積 (除數 x 商十位) */}
+                            <div className="flex justify-start gap-1 pl-4">
+                                <Slot q={q} id="p1" val={d.p1} userInputs={userInputs} mode={mode} onInput={onInput} />
+                                <div className="w-[40px]"></div>
+                            </div>
+
+                            {/* Line */}
+                            <div className="pl-4"><div className="subtraction-line w-[44px]"></div></div>
+
+                            {/* Row 4: 餘數1 + 降位 */}
+                            <div className="flex justify-start gap-1 pl-4">
+                                <Slot q={q} id="rem1" val={d.rem1} userInputs={userInputs} mode={mode} onInput={onInput} />
+                                {/* 降位數字：這通常是被除數個位的複製 */}
+                                <Slot q={q} id="bd" val={d.div_o} userInputs={userInputs} mode={mode} onInput={onInput} />
+                            </div>
+
+                            {/* Row 5: 第二步乘積 (除數 x 商個位) */}
+                            <div className="flex justify-start gap-1 pl-4">
+                                {/* p2_t 和 p2_o 分開處理，因為可能是兩位數 */}
+                                {d.p2 >= 10 ? (
+                                    <>
+                                        <Slot q={q} id="p2_t" val={Math.floor(d.p2/10)} userInputs={userInputs} mode={mode} onInput={onInput} />
+                                        <Slot q={q} id="p2_o" val={d.p2%10} userInputs={userInputs} mode={mode} onInput={onInput} />
+                                    </>
+                                ) : (
+                                    <>
+                                        <div className="w-[40px]"></div>
+                                        <Slot q={q} id="p2_o" val={d.p2} userInputs={userInputs} mode={mode} onInput={onInput} />
+                                    </>
+                                )}
+                            </div>
+
+                            {/* Line */}
+                            <div className="pl-4"><div className="subtraction-line w-[88px]"></div></div>
+
+                            {/* Row 6: 最終餘數 */}
+                            <div className="flex justify-end gap-1 pl-4">
+                                <Slot q={q} id="rem2" val={d.rem2} userInputs={userInputs} mode={mode} onInput={onInput} />
+                            </div>
                         </div>
                     </div>
 
-                    <button className="mt-8 bg-indigo-600 text-white px-8 py-3 rounded-2xl font-bold shadow-lg">
-                        確認介面樣式
-                    </button>
+                    <div className="mt-8 min-h-[3rem]">
+                        {feedback && (
+                            <div className={`p-3 rounded-xl text-center font-bold ${feedback.type === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
+                                {feedback.msg}
+                            </div>
+                        )}
+                    </div>
+
+                    {mode === 'normal' && (
+                        <button onClick={onSubmit} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-2xl font-black py-4 rounded-2xl shadow-lg mt-4 active:scale-95 transition-transform">
+                            提交 Check
+                        </button>
+                    )}
                 </div>
             );
         };
 
-        const root = ReactDOM.createRoot(document.getElementById('root'));
-        root.render(<DivisionMockup />);
-    </script>
-</body>
-</html>
+        const App = () => {
+            const [step, setStep] = useState('menu');
+            const [qIndex, setQIndex] = useState(0);
+            const [questions, setQuestions] = useState([]);
+            const [userInputs, setUserInputs] = useState({});
+            const [mode, setMode] = useState('normal'); 
+            const [feedback, setFeedback] = useState(null);
+            const [history, setHistory] = useState([]);
+
+            // *** V3.0 除法出題引擎 (Triple Lock) ***
+            const generateQuestions = useCallback(() => {
+                let newQs = [];
+                for(let i=0; i<TOTAL_QUESTIONS; i++) {
+                    let validPuzzle = false;
+                    let puzzleData = null;
+                    
+                    while(!validPuzzle) {
+                        // 1. 生成合理數字 (兩位數 / 一位數 = 兩位數)
+                        // 為了確保題目有意義，商(Quotient) 設定為 11-30 左右，太簡單或太難都不好
+                        // 除數 2-9
+                        let divisor = Math.floor(Math.random() * 8) + 2; 
+                        let quotient = Math.floor(Math.random() * 20) + 11; // 11
