@@ -5,7 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="theme-color" content="#f0f9ff">
-    <title>Jasper 除法特訓 V3.0 (Safari Fix)</title>
+    <title>Jasper 除法特訓 V3.1 (3位數升級版)</title>
     
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
@@ -18,24 +18,22 @@
         body { font-family: 'Noto Sans TC', sans-serif; background-color: #f0f9ff; touch-action: manipulation; }
         .math-font { font-family: 'Roboto Mono', monospace; }
         
-        /* 輸入框樣式 */
         .input-box {
-            width: 40px; height: 50px;
-            text-align: center; font-size: 1.5rem; font-weight: 700;
+            width: 36px; height: 48px; /* 稍微調窄以容納3位數 */
+            text-align: center; font-size: 1.4rem; font-weight: 700;
             border: 2px solid #cbd5e1; background-color: white;
             border-radius: 0.5rem; outline: none;
             font-family: 'Roboto Mono', monospace;
             display: flex; align-items: center; justify-content: center;
             transition: all 0.2s;
-            -webkit-appearance: none; /* Safari Fix */
-            margin: 0;
+            -webkit-appearance: none; margin: 0;
         }
         .input-box:focus { border-color: #6366f1; background-color: #eef2ff; }
         
         .static-num {
-            width: 40px; height: 50px;
+            width: 36px; height: 48px;
             display: flex; align-items: center; justify-content: center;
-            font-size: 1.8rem; font-weight: 900; color: #334155;
+            font-size: 1.6rem; font-weight: 900; color: #334155;
             font-family: 'Roboto Mono', monospace;
         }
         .correct { border-color: #22c55e; background-color: #f0fdf4; color: #15803d; }
@@ -55,40 +53,29 @@
     <div id="root"></div>
 
     <script type="text/babel">
-        // Safari 錯誤處理：如果 React 載入失敗，顯示錯誤
+        // Safari 錯誤處理
         window.onerror = function(message, source, lineno, colno, error) {
             if (document.getElementById('root').innerHTML === "") {
-                document.getElementById('root').innerHTML = `<div style="padding:20px; text-align:center; color:red;">
-                    <h3>⚠️ 程式載入錯誤</h3>
-                    <p>${message}</p>
-                    <p>請嘗試重新整理或檢查網路連線。</p>
-                </div>`;
+                document.getElementById('root').innerHTML = `<div style="padding:20px; text-align:center; color:red;"><h3>⚠️ 程式載入錯誤</h3><p>${message}</p></div>`;
             }
         };
 
         const { useState, useEffect, useCallback, memo } = React;
         const TOTAL_QUESTIONS = 10;
         
-        // --- 修正版音效模組 (Safari Safe) ---
-        // 不要在全域建立 AudioContext，改為 Lazy Load
+        // --- 音效模組 ---
         let audioCtx = null;
-
         const initAudio = () => {
             if (!audioCtx) {
                 const AudioContext = window.AudioContext || window.webkitAudioContext;
-                if (AudioContext) {
-                    audioCtx = new AudioContext();
-                }
+                if (AudioContext) audioCtx = new AudioContext();
             }
-            if (audioCtx && audioCtx.state === 'suspended') {
-                audioCtx.resume();
-            }
+            if (audioCtx && audioCtx.state === 'suspended') audioCtx.resume();
         };
         
         const playSound = (type) => {
-            initAudio(); // 確保 AudioContext 已建立
+            initAudio();
             if (!audioCtx) return;
-
             const now = audioCtx.currentTime;
             const osc = audioCtx.createOscillator();
             const gain = audioCtx.createGain();
@@ -117,6 +104,7 @@
 
         const Slot = ({ q, id, val, userInputs, mode, onInput }) => {
             const isBlank = q.blanks.includes(id);
+            // 視覺優化：如果是0且是百位數的前導零，可以選擇隱藏或顯示，這裡為了除法完整性，如果數字本身是3位數，就顯示
             if (!isBlank) return <div className="static-num">{val}</div>;
 
             const inputVal = userInputs[id] || '';
@@ -141,28 +129,30 @@
         const QuestionCard = ({ q, index, userInputs, mode, feedback, onInput, onSubmit }) => {
             if (!q) return null;
             const d = q.digits; 
+            const isThreeDigit = d.dividend > 99; // 判斷是否為三位數題目
 
             return (
-                <div className="bg-white p-6 md:p-8 rounded-[2rem] shadow-xl border border-indigo-100 max-w-md w-full fade-in mx-auto mt-10">
-                    <div className="flex justify-between items-center mb-8">
+                <div className="bg-white p-6 rounded-[2rem] shadow-xl border border-indigo-100 max-w-md w-full fade-in mx-auto mt-6">
+                    <div className="flex justify-between items-center mb-6">
                         <span className="bg-indigo-100 text-indigo-700 px-4 py-1 rounded-full text-sm font-bold">Q {index + 1} / {TOTAL_QUESTIONS}</span>
                         <span className="text-slate-400 font-mono font-bold">除法特訓</span>
                     </div>
 
                     <div className="flex justify-center text-3xl select-none">
                         {/* 左邊：除數 */}
-                        <div className="flex flex-col items-end pt-[3.5rem] mr-1">
+                        <div className="flex flex-col items-end pt-[3.2rem] mr-1">
                             <div className="static-num">{d.divisor}</div> 
-                            <div className="h-12 w-8 text-slate-300 text-xl flex items-center justify-end font-bold">-</div>
-                            <div className="h-2"></div>
-                            <div className="h-12"></div>
-                            <div className="h-12 w-8 text-slate-300 text-xl flex items-center justify-end font-bold">-</div>
+                            <div className="h-[48px] w-8 text-slate-300 text-xl flex items-center justify-end font-bold">-</div>
+                            <div className="h-1"></div>
+                            <div className="h-[48px]"></div>
+                            <div className="h-[48px] w-8 text-slate-300 text-xl flex items-center justify-end font-bold">-</div>
                         </div>
 
                         {/* 右邊：主體 */}
                         <div>
-                            {/* Row 1: 商 */}
+                            {/* Row 1: 商 (百位保持空或隱藏，只顯示十位個位，因為商設定為 <100) */}
                             <div className="flex justify-start pl-4 gap-1 mb-1">
+                                {isThreeDigit && <div className="w-[36px]"></div>} {/* 百位留空 */}
                                 <Slot q={q} id="q_t" val={d.q_t} userInputs={userInputs} mode={mode} onInput={onInput} />
                                 <Slot q={q} id="q_o" val={d.q_o} userInputs={userInputs} mode={mode} onInput={onInput} />
                             </div>
@@ -170,27 +160,48 @@
                             {/* Row 2: 被除數 */}
                             <div className="division-bracket pt-1 pb-1">
                                 <div className="flex gap-1">
-                                    <Slot q={q} id="div_t" val={d.div_t} userInputs={userInputs} mode={mode} onInput={onInput} />
-                                    <Slot q={q} id="div_o" val={d.div_o} userInputs={userInputs} mode={mode} onInput={onInput} />
+                                    {isThreeDigit ? (
+                                        <>
+                                            <Slot q={q} id="div_h" val={d.div_h} userInputs={userInputs} mode={mode} onInput={onInput} />
+                                            <Slot q={q} id="div_t" val={d.div_t} userInputs={userInputs} mode={mode} onInput={onInput} />
+                                            <Slot q={q} id="div_o" val={d.div_o} userInputs={userInputs} mode={mode} onInput={onInput} />
+                                        </>
+                                    ) : (
+                                        <>
+                                            <Slot q={q} id="div_t" val={d.div_t} userInputs={userInputs} mode={mode} onInput={onInput} />
+                                            <Slot q={q} id="div_o" val={d.div_o} userInputs={userInputs} mode={mode} onInput={onInput} />
+                                        </>
+                                    )}
                                 </div>
                             </div>
 
-                            {/* Row 3: P1 */}
+                            {/* Row 3: P1 (積1) */}
                             <div className="flex justify-start gap-1 pl-4">
-                                <Slot q={q} id="p1" val={d.p1} userInputs={userInputs} mode={mode} onInput={onInput} />
-                                <div className="w-[40px]"></div>
+                                {isThreeDigit ? (
+                                    <>
+                                        {/* 三位數題目，P1 通常對齊百位和十位 */}
+                                        <Slot q={q} id="p1_h" val={Math.floor(d.p1/10)} userInputs={userInputs} mode={mode} onInput={onInput} />
+                                        <Slot q={q} id="p1_t" val={d.p1%10} userInputs={userInputs} mode={mode} onInput={onInput} />
+                                        <div className="w-[36px]"></div> {/* 個位留空 */}
+                                    </>
+                                ) : (
+                                    <>
+                                        <Slot q={q} id="p1" val={d.p1} userInputs={userInputs} mode={mode} onInput={onInput} />
+                                        <div className="w-[36px]"></div>
+                                    </>
+                                )}
                             </div>
 
-                            <div className="pl-4"><div className="subtraction-line w-[44px]"></div></div>
+                            <div className="pl-4"><div className="subtraction-line w-full"></div></div>
 
                             {/* Row 4: Rem1 + BD */}
-                            <div className="flex justify-start gap-1 pl-4">
+                            <div className="flex justify-end gap-1 pl-4">
                                 <Slot q={q} id="rem1" val={d.rem1} userInputs={userInputs} mode={mode} onInput={onInput} />
                                 <Slot q={q} id="bd" val={d.div_o} userInputs={userInputs} mode={mode} onInput={onInput} />
                             </div>
 
-                            {/* Row 5: P2 */}
-                            <div className="flex justify-start gap-1 pl-4">
+                            {/* Row 5: P2 (積2) */}
+                            <div className="flex justify-end gap-1 pl-4">
                                 {d.p2 >= 10 ? (
                                     <>
                                         <Slot q={q} id="p2_t" val={Math.floor(d.p2/10)} userInputs={userInputs} mode={mode} onInput={onInput} />
@@ -198,13 +209,13 @@
                                     </>
                                 ) : (
                                     <>
-                                        <div className="w-[40px]"></div>
+                                        <div className="w-[36px]"></div>
                                         <Slot q={q} id="p2_o" val={d.p2} userInputs={userInputs} mode={mode} onInput={onInput} />
                                     </>
                                 )}
                             </div>
 
-                            <div className="pl-4"><div className="subtraction-line w-[88px]"></div></div>
+                            <div className="pl-4"><div className="subtraction-line w-full"></div></div>
 
                             {/* Row 6: Rem2 */}
                             <div className="flex justify-end gap-1 pl-4">
@@ -213,7 +224,7 @@
                         </div>
                     </div>
 
-                    <div className="mt-8 min-h-[3rem]">
+                    <div className="mt-6 min-h-[3rem]">
                         {feedback && (
                             <div className={`p-3 rounded-xl text-center font-bold ${feedback.type === 'success' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-600'}`}>
                                 {feedback.msg}
@@ -221,11 +232,9 @@
                         )}
                     </div>
 
-                    {mode === 'normal' && (
-                        <button onClick={onSubmit} className="w-full bg-indigo-600 hover:bg-indigo-700 text-white text-2xl font-black py-4 rounded-2xl shadow-lg mt-4 active:scale-95 transition-transform">
-                            提交 Check
-                        </button>
-                    )}
+                    <button onClick={onSubmit} className={`w-full text-white text-2xl font-black py-4 rounded-2xl shadow-lg mt-4 active:scale-95 transition-transform ${mode === 'retry' ? 'bg-orange-500 hover:bg-orange-600' : 'bg-indigo-600 hover:bg-indigo-700'}`}>
+                        {mode === 'retry' ? '再試一次 Check' : '提交 Check'}
+                    </button>
                 </div>
             );
         };
@@ -245,41 +254,76 @@
                     let puzzleData = null;
                     
                     while(!validPuzzle) {
+                        // 混合模式：50% 機率 2位數，50% 機率 3位數
+                        // 關鍵限制：商(Quotient) 必須是 2 位數 (10-99)，以符合目前 UI
                         let divisor = Math.floor(Math.random() * 8) + 2; 
-                        let quotient = Math.floor(Math.random() * 20) + 11; 
+                        let quotient = Math.floor(Math.random() * 89) + 10; // 商 10~99
                         let remainder = Math.floor(Math.random() * divisor);
                         let dividend = divisor * quotient + remainder;
 
-                        if (dividend > 99) continue;
+                        // UI 限制：暫時不處理商是 3 位數的情況 (因為 UI 只有兩層減法)
+                        // 所以 dividend 雖然可以是 3 位數，但商最多兩位
+                        // 例如 125 / 5 = 25 (OK), 900 / 3 = 300 (UI 不支援)
 
-                        let div_t = Math.floor(dividend / 10);
+                        let div_h = Math.floor(dividend / 100);
+                        let div_t = Math.floor((dividend % 100) / 10);
                         let div_o = dividend % 10;
                         let q_t = Math.floor(quotient / 10);
                         let q_o = quotient % 10;
-                        
-                        if (div_t < divisor) continue; 
 
-                        let p1 = divisor * q_t;
-                        let rem1 = div_t - p1;
+                        // 計算邏輯
+                        let p1 = divisor * q_t; // 第一層積
+                        // 判斷第一層減法是 "div_t - p1" (2位數) 還是 "div_ht - p1" (3位數)
+                        // 因為商是兩位數，說明第一步是用 (百位*10 + 十位) 去除
+                        // 例如 125 / 5，第一步是 12 / 5 = 2 ... 2
+                        // 此時 p1 是 10，rem1 是 2
+                        
+                        let firstPart = (dividend >= 100) ? (div_h * 10 + div_t) : div_t;
+                        
+                        // 檢查邏輯：確保第一步夠除 (UI對齊需要)
+                        if (firstPart < divisor * q_t) continue;
+
+                        let rem1 = firstPart - p1;
                         let brought_down = div_o;
                         let comp_num = rem1 * 10 + brought_down;
                         let p2 = divisor * q_o;
                         let rem2 = comp_num - p2;
 
-                        const digits = { divisor, q_t, q_o, div_t, div_o, p1, rem1, bd: brought_down, p2, rem2 };
+                        const digits = { 
+                            dividend, divisor, q_t, q_o, 
+                            div_h, div_t, div_o, 
+                            p1, rem1, bd: brought_down, p2, rem2 
+                        };
                         
-                        let allKeys = ['q_t', 'q_o', 'div_t', 'div_o', 'p1', 'rem1', 'bd', 'rem2'];
-                        if (p2 >= 10) allKeys.push('p2_o'); else allKeys.push('p2_o');
+                        // 挖空鍵值生成
+                        let allKeys = [];
+                        if (dividend > 99) {
+                            allKeys = ['q_t', 'q_o', 'div_h', 'div_t', 'div_o', 'p1_h', 'p1_t', 'rem1', 'bd', 'rem2'];
+                            // p2 拆分
+                            if (p2 >= 10) { allKeys.push('p2_t'); allKeys.push('p2_o'); } else { allKeys.push('p2_o'); }
+                        } else {
+                            allKeys = ['q_t', 'q_o', 'div_t', 'div_o', 'p1', 'rem1', 'bd', 'rem2'];
+                            if (p2 >= 10) { allKeys.push('p2_t'); allKeys.push('p2_o'); } else { allKeys.push('p2_o'); }
+                        }
 
                         const shuffledKeys = allKeys.sort(() => 0.5 - Math.random());
                         let currentBlanks = [];
-
-                        const constraintGroups = [
-                            ['div_t', 'p1', 'rem1'], 
-                            ['bd', 'p2_o', 'rem2'],
-                            ['q_t', 'p1'],
-                            ['q_o', 'p2_o']
-                        ];
+                        
+                        // 互斥組檢查 (簡單版：每一橫行/直行不要挖太多)
+                        let constraintGroups = [];
+                        if (dividend > 99) {
+                            constraintGroups = [
+                                ['div_h', 'div_t', 'p1_h', 'p1_t', 'rem1'], 
+                                ['bd', 'p2_o', 'rem2'],
+                                ['q_t', 'p1_t'], ['q_o', 'p2_o']
+                            ];
+                        } else {
+                            constraintGroups = [
+                                ['div_t', 'p1', 'rem1'], 
+                                ['bd', 'p2_o', 'rem2'],
+                                ['q_t', 'p1'], ['q_o', 'p2_o']
+                            ];
+                        }
 
                         for (let key of shuffledKeys) {
                             let isAmbiguous = false;
@@ -303,7 +347,7 @@
             }, []);
 
             const startQuiz = () => {
-                initAudio(); // 用戶點擊時初始化音效
+                initAudio();
                 setQuestions(generateQuestions());
                 setQIndex(0); setUserInputs({}); setMode('normal'); setFeedback(null); setStep('quiz');
             };
@@ -313,19 +357,28 @@
                 if (mode === 'normal') {
                     setUserInputs(prev => ({ ...prev, [key]: num }));
                 } else if (mode === 'retry') {
+                    // Retry 模式下，輸入即時檢查，但不自動跳轉，需要按按鈕確認
                     const q = questions[qIndex];
                     let correctVal;
-                    if (key === 'p2_o') correctVal = (q.digits.p2 % 10).toString();
-                    else if (key === 'p2_t') correctVal = Math.floor(q.digits.p2 / 10).toString();
-                    else correctVal = q.digits[key].toString();
+                    // 特殊處理：3位數題目的 p1 拆分
+                    if (q.digits.dividend > 99) {
+                         if (key === 'p1_h') correctVal = Math.floor(q.digits.p1/10).toString();
+                         else if (key === 'p1_t') correctVal = (q.digits.p1%10).toString();
+                         else if (key === 'p2_t') correctVal = Math.floor(q.digits.p2/10).toString();
+                         else if (key === 'p2_o') correctVal = (q.digits.p2%10).toString();
+                         else correctVal = q.digits[key].toString();
+                    } else {
+                         if (key === 'p2_t') correctVal = Math.floor(q.digits.p2/10).toString();
+                         else if (key === 'p2_o') correctVal = (q.digits.p2%10).toString();
+                         else correctVal = q.digits[key].toString();
+                    }
 
                     if (num === correctVal) {
                         playSound('success');
                         setUserInputs(prev => ({ ...prev, [key]: num }));
-                        setFeedback({ type: 'success', msg: 'Correct!' });
+                        // 這裡不自動切題，讓用戶填完所有格子後按按鈕
                     } else {
                         playSound('error');
-                        setFeedback({ type: 'error', msg: '再試一次！' });
                     }
                 }
             };
@@ -333,19 +386,28 @@
             const submit = () => {
                 const q = questions[qIndex];
                 let allCorrect = true;
+                
+                // 檢查所有空格
                 q.blanks.forEach(key => {
                     let correctVal;
-                    if (key === 'p2_o') correctVal = (q.digits.p2 % 10).toString();
-                    else if (key === 'p2_t') correctVal = Math.floor(q.digits.p2 / 10).toString();
-                    else correctVal = q.digits[key].toString();
-
+                    if (q.digits.dividend > 99) {
+                         if (key === 'p1_h') correctVal = Math.floor(q.digits.p1/10).toString();
+                         else if (key === 'p1_t') correctVal = (q.digits.p1%10).toString();
+                         else if (key === 'p2_t') correctVal = Math.floor(q.digits.p2/10).toString();
+                         else if (key === 'p2_o') correctVal = (q.digits.p2%10).toString();
+                         else correctVal = q.digits[key].toString();
+                    } else {
+                         if (key === 'p2_t') correctVal = Math.floor(q.digits.p2/10).toString();
+                         else if (key === 'p2_o') correctVal = (q.digits.p2%10).toString();
+                         else correctVal = q.digits[key].toString();
+                    }
                     if (userInputs[key] !== correctVal) allCorrect = false;
                 });
 
                 if (allCorrect) {
                     playSound('success');
                     if (qIndex < TOTAL_QUESTIONS - 1) {
-                        setQIndex(prev => prev + 1); setUserInputs({}); setFeedback(null);
+                        setQIndex(prev => prev + 1); setUserInputs({}); setFeedback(null); setMode('normal');
                     } else {
                         setStep('menu');
                         playSound('win');
@@ -362,7 +424,7 @@
                     {step === 'menu' && (
                         <div className="text-center bg-white p-10 rounded-[2.5rem] shadow-xl max-w-sm w-full border-4 border-white ring-4 ring-indigo-50 fade-in">
                             <h1 className="text-4xl font-black text-slate-800 mb-2">➗ 除法特訓</h1>
-                            <p className="text-slate-500 mb-8 font-bold">V3.0 (Safari Ready)</p>
+                            <p className="text-slate-500 mb-8 font-bold">V3.1 (3位數版)</p>
                             <button onClick={startQuiz} className="w-full bg-indigo-600 text-white py-5 rounded-2xl text-2xl font-black shadow-lg active:scale-95 transition-all">
                                 開始挑戰
                             </button>
